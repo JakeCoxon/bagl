@@ -30,19 +30,29 @@ export interface CommandBuilder {
 export function createCommandBuilder(internalState: InternalState): CommandBuilder {
   return {
     build<P>(desc: CommandDesc<P>, context: ContextLifecycle, contextObj: Context): DrawCommand<P> {
-      let impl: ((props: P) => void) | null = null;
+      let impl: ((props: P, inner?: () => void) => void) | null = null;
       let program: any = null;
       let vao: WebGLVertexArrayObject | null = null;
 
       // Register hooks for context lifecycle
       context.onAttach((glContextState) => {
         try {
-          const { gl } = glContextState;
+          const stateOnly = desc.vert === undefined && desc.frag === undefined;
+          if (!stateOnly && (desc.vert === undefined || desc.frag === undefined)) {
+            throw new Error('bagl: command must provide both vert and frag for draw, or omit both for state-only command');
+          }
+          if (!stateOnly && desc.attributes === undefined) {
+            throw new Error('bagl: draw command must provide attributes');
+          }
 
-          program = buildProgram(gl, desc.vert, desc.frag, undefined, contextObj);
-          const vao = compileVAO(gl, program, desc);
-          
-          impl = createDrawImpl(glContextState, program, vao, desc, contextObj);
+          if (stateOnly) {
+            impl = createStateOnlyImpl(glContextState, desc, contextObj);
+          } else {
+            const { gl } = glContextState;
+            program = buildProgram(gl, desc.vert!, desc.frag!, undefined, contextObj);
+            const vao = compileVAO(gl, program, desc as Required<Pick<CommandDesc<P>, 'vert' | 'frag' | 'attributes'>>);
+            impl = createDrawImpl(glContextState, program, vao, desc as Required<Pick<CommandDesc<P>, 'vert' | 'frag' | 'attributes'>>, contextObj);
+          }
         } catch (error) {
           impl = null;
           throw error;
@@ -55,11 +65,11 @@ export function createCommandBuilder(internalState: InternalState): CommandBuild
         vao = null;
       });
 
-      return function draw(props?: P): void {
+      return function draw(props?: P, inner?: () => void): void {
         if (!impl) {
           throw new Error('bagl: draw() called when not attached to a context');
         }
-        impl(props || {} as P);
+        impl(props || {} as P, inner);
       };
     }
   };
@@ -74,11 +84,25 @@ function evaluateCommandDesc<P>(
   const elements = desc.elements ? evaluatePropValue(desc.elements, props, contextObj) : undefined;
   // Evaluate attributes if they're functions
   const evaluatedAttributes: Record<string, AttributeInit> = {};
-  for (const [name, attr] of Object.entries(desc.attributes)) {
+  for (const [name, attr] of Object.entries(desc.attributes ?? {})) {
     evaluatedAttributes[name] = evaluatePropValue(attr, props, contextObj);
   }
 
   return { program, elements, attributes: evaluatedAttributes };
+}
+
+function createStateOnlyImpl<P>(
+  glContextState: GLContextState,
+  desc: CommandDesc<P>,
+  contextObj: Context
+): (props: P, inner?: () => void) => void {
+  return function draw(props: P, inner?: () => void): void {
+    const { state } = glContextState;
+    state.push();
+    applyState(glContextState.gl, state, desc, props, contextObj);
+    if (inner) inner();
+    state.pop();
+  };
 }
 
 function createDrawImpl<P>(
@@ -87,8 +111,8 @@ function createDrawImpl<P>(
   vao: CompiledVAO<P>,
   desc: CommandDesc<P>,
   contextObj: Context
-): (props: P) => void {
-  return function draw(props: P): void {
+): (props: P, inner?: () => void) => void {
+  return function draw(props: P, inner?: () => void): void {
     const { gl, state } = glContextState;
     state.push();
 
@@ -103,6 +127,7 @@ function createDrawImpl<P>(
 
     performDraw(gl, program, desc, props, contextObj);
 
+    if (inner) inner();
     state.pop();
   };
 }

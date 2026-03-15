@@ -397,6 +397,183 @@ describe('CommandBuilder', () => {
       
       expect(drawArraysSpy).toHaveBeenCalledTimes(3);
     });
+
+    it('should run inner function with command GL state (blend, framebuffer, viewport)', () => {
+      const fbo = createFramebuffer(
+        { width: 256, height: 128 },
+        internalState,
+        registry,
+        context
+      );
+
+      const desc = {
+        vert: `
+          #version 300 es
+          precision mediump float;
+          in vec2 position;
+          void main() {
+            gl_Position = vec4(position, 0.0, 1.0);
+          }
+        `,
+        frag: `
+          #version 300 es
+          precision mediump float;
+          out vec4 color;
+          void main() {
+            color = vec4(1.0, 0.0, 0.0, 1.0);
+          }
+        `,
+        attributes: {
+          position: createBuffer({
+            data: new Float32Array([-1, -1, 1, -1, 0, 1]),
+            size: 2
+          }, registry, context)
+        },
+        framebuffer: fbo,
+        blend: {
+          enable: true,
+          func: ['src-alpha', 'one-minus-src-alpha']
+        },
+        count: 3
+      } satisfies CommandDesc<unknown>;
+
+      mockGlSetUniforms(mockGL, ['position']);
+      mockGlSetAttribs(mockGL, ['position']);
+
+      const command = commandBuilder.build(desc, context, contextObj);
+
+      command(undefined, () => {
+        const s = internalState.glContextState!.state.current;
+        expect(s.blend).toBe(true);
+        expect(s.blendFunc).toEqual([mockGL.SRC_ALPHA, mockGL.ONE_MINUS_SRC_ALPHA]);
+        expect(s.framebuffer).toBe(fbo);
+        expect(s.viewport).toEqual([0, 0, 256, 128]);
+      });
+    });
+
+    it('should restore state after inner function returns (blend and framebuffer)', () => {
+      const fbo = createFramebuffer(
+        { width: 64, height: 64 },
+        internalState,
+        registry,
+        context
+      );
+
+      const stateManager = internalState.glContextState!.state;
+      stateManager.set({
+        blend: true,
+        blendFunc: [mockGL.ONE, mockGL.ZERO],
+        framebuffer: fbo
+      });
+      if (stateManager.batching) stateManager.flush();
+
+      const stateBefore = { ...stateManager.current };
+
+      const desc = {
+        vert: `
+          #version 300 es
+          precision mediump float;
+          in vec2 position;
+          void main() {
+            gl_Position = vec4(position, 0.0, 1.0);
+          }
+        `,
+        frag: `
+          #version 300 es
+          precision mediump float;
+          out vec4 color;
+          void main() {
+            color = vec4(1.0, 0.0, 0.0, 1.0);
+          }
+        `,
+        attributes: {
+          position: createBuffer({
+            data: new Float32Array([-1, -1, 1, -1, 0, 1]),
+            size: 2
+          }, registry, context)
+        },
+        blend: {
+          enable: true,
+          func: ['src-alpha', 'one-minus-src-alpha']
+        },
+        framebuffer: null,
+        count: 3
+      } satisfies CommandDesc<unknown>;
+
+      mockGlSetUniforms(mockGL, ['position']);
+      mockGlSetAttribs(mockGL, ['position']);
+
+      const command = commandBuilder.build(desc, context, contextObj);
+
+      command(undefined, () => {});
+
+      const stateAfter = stateManager.current;
+      expect(stateAfter.blend).toBe(stateBefore.blend);
+      expect(stateAfter.blendFunc).toEqual(stateBefore.blendFunc);
+      expect(stateAfter.framebuffer).toBe(stateBefore.framebuffer);
+    });
+
+    it('should run state-only command with inner and apply framebuffer + blend', () => {
+      const fbo = createFramebuffer(
+        { width: 256, height: 128 },
+        internalState,
+        registry,
+        context
+      );
+
+      const desc = {
+        framebuffer: fbo,
+        blend: {
+          enable: true,
+          func: ['src-alpha', 'one-minus-src-alpha']
+        }
+      } satisfies CommandDesc<unknown>;
+
+      const command = commandBuilder.build(desc, context, contextObj);
+
+      command(undefined, () => {
+        const s = internalState.glContextState!.state.current;
+        expect(s.blend).toBe(true);
+        expect(s.blendFunc).toEqual([mockGL.SRC_ALPHA, mockGL.ONE_MINUS_SRC_ALPHA]);
+        expect(s.framebuffer).toBe(fbo);
+        expect(s.viewport).toEqual([0, 0, 256, 128]);
+      });
+    });
+
+    it('should restore state after state-only command with inner returns', () => {
+      const fbo = createFramebuffer(
+        { width: 64, height: 64 },
+        internalState,
+        registry,
+        context
+      );
+
+      const stateManager = internalState.glContextState!.state;
+      stateManager.set({
+        blend: true,
+        blendFunc: [mockGL.ONE, mockGL.ZERO],
+        framebuffer: fbo
+      });
+      if (stateManager.batching) stateManager.flush();
+
+      const stateBefore = { ...stateManager.current };
+
+      const command = commandBuilder.build(
+        {
+          blend: { enable: true, func: ['src-alpha', 'one-minus-src-alpha'] },
+          framebuffer: null
+        } satisfies CommandDesc<unknown>,
+        context,
+        contextObj
+      );
+
+      command(undefined, () => {});
+
+      const stateAfter = stateManager.current;
+      expect(stateAfter.blend).toBe(stateBefore.blend);
+      expect(stateAfter.blendFunc).toEqual(stateBefore.blendFunc);
+      expect(stateAfter.framebuffer).toBe(stateBefore.framebuffer);
+    });
   });
 
   describe('error handling', () => {
@@ -472,6 +649,63 @@ describe('CommandBuilder', () => {
       vi.spyOn(mockGL, 'getProgramInfoLog').mockReturnValue('Linking error');
 
       expect(() => commandBuilder.build(desc, context, contextObj)).toThrow();
+    });
+
+    it('should throw when only vert is provided without frag', () => {
+      const desc = {
+        vert: `
+          #version 300 es
+          precision mediump float;
+          in vec2 position;
+          void main() { gl_Position = vec4(position, 0.0, 1.0); }
+        `,
+        attributes: {
+          position: createBuffer({
+            data: new Float32Array([-1, -1, 1, -1, 0, 1]),
+            size: 2
+          }, registry, context)
+        },
+        count: 3
+      } satisfies CommandDesc<unknown>;
+      expect(() => commandBuilder.build(desc, context, contextObj)).toThrow(/both vert and frag/);
+    });
+
+    it('should throw when only frag is provided without vert', () => {
+      const desc = {
+        frag: `
+          #version 300 es
+          precision mediump float;
+          out vec4 color;
+          void main() { color = vec4(1.0, 0.0, 0.0, 1.0); }
+        `,
+        attributes: {
+          position: createBuffer({
+            data: new Float32Array([-1, -1, 1, -1, 0, 1]),
+            size: 2
+          }, registry, context)
+        },
+        count: 3
+      } satisfies CommandDesc<unknown>;
+      expect(() => commandBuilder.build(desc, context, contextObj)).toThrow(/both vert and frag/);
+    });
+
+    it('should throw when draw command has no attributes', () => {
+      const desc = {
+        vert: `
+          #version 300 es
+          precision mediump float;
+          in vec2 position;
+          void main() { gl_Position = vec4(position, 0.0, 1.0); }
+        `,
+        frag: `
+          #version 300 es
+          precision mediump float;
+          out vec4 color;
+          void main() { color = vec4(1.0, 0.0, 0.0, 1.0); }
+        `,
+        count: 3
+      } satisfies CommandDesc<unknown>;
+      expect(() => commandBuilder.build(desc, context, contextObj)).toThrow(/attributes/);
     });
   });
 

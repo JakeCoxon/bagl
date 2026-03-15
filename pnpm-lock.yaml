@@ -7,13 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      earcut:
-        specifier: ^3.0.2
-        version: 3.0.2
-      tweakpane:
-        specifier: ^4.0.5
-        version: 4.0.5
     devDependencies:
       '@types/jsdom':
         specifier: ^21.1.6
@@ -24,12 +17,18 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^2.1.8
         version: 2.1.9(vitest@2.1.9(@types/node@22.16.5)(jsdom@25.0.1))
+      earcut:
+        specifier: ^3.0.2
+        version: 3.0.2
       gl-mat4:
         specifier: ^1.2.0
         version: 1.2.0
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
+      tweakpane:
+        specifier: ^4.0.5
+        version: 4.0.5
       typescript:
         specifier: ~5.8.3
         version: 5.8.3

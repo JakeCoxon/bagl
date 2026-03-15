@@ -1,5 +1,6 @@
 // import { attachToCanvas, setupContextLossHandling } from './example';
 import { createBasicTriangleExample } from './basic-triangle';
+import { createCommandInnerStateExample } from './command-inner-state';
 import { createAnimatedTriangleExample } from './animated-triangle';
 import { create3DCubeExample } from './3d-cube';
 import { createFramebufferExample } from './framebuffer';
@@ -100,6 +101,7 @@ contentHeader.appendChild(contextInfo);
 
 const options = [
   { value: 'basic', text: 'Basic Triangle' },
+  { value: 'command-inner-state', text: 'Command Inner State' },
   { value: 'animated', text: 'Animated Triangle' },
   { value: '3d-cube', text: '3D Rotating Cube' },
   { value: 'framebuffer', text: 'Framebuffer Example' },
@@ -274,6 +276,14 @@ function runExample(exampleType: string) {
       
     case 'basic':
       currentExample = createBasicTriangleExample();
+      currentBagl = currentExample.bagl;
+      currentBagl.attach(gl);
+      currentExample.render();
+      updateContextInfo();
+      break;
+
+    case 'command-inner-state':
+      currentExample = createCommandInnerStateExample();
       currentBagl = currentExample.bagl;
       currentBagl.attach(gl);
       currentExample.render();

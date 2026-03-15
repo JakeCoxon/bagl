@@ -220,11 +220,11 @@ export interface FramebufferCubeHandle {
 export type GLSLThunk<P> = PropValue<string, P>;
 
 export interface CommandDesc<P = any> {
-  vert: GLSLThunk<P>;
-  frag: GLSLThunk<P>;
+  vert?: GLSLThunk<P>;
+  frag?: GLSLThunk<P>;
 
   // Geometry
-  attributes: AttributeMap<P>;
+  attributes?: AttributeMap<P>;
   elements?: PropValue<ElementsDescInit, P>;
   instances?: NumberProp<P>;
   count?: NumberProp<P>;
@@ -255,7 +255,7 @@ export type StateChange = {
   stencil?: number;
 }
 
-export type DrawCommand<P = any> = (props?: P) => void;
+export type DrawCommand<P = any> = (props?: P, inner?: () => void) => void;
 
 export type BaglObject = BufferHandle | ElementsHandle | Texture2DHandle | CubeMapHandle | FramebufferHandle | FramebufferCubeHandle;
 
