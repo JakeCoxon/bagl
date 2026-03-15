@@ -16,7 +16,7 @@ A modern WebGL2 wrapper with deferred context binding, inspired by the original 
 ## Installation
 
 ```bash
-npm install bagl
+npm install bagl-js
 ```
 
 ## Basic Usage
@@ -24,7 +24,7 @@ npm install bagl
 ### Immediate Context Binding
 
 ```typescript
-import { createBagl } from 'bagl';
+import { createBagl } from 'bagl-js';
 
 const canvas = document.querySelector('canvas')!;
 const bagl = createBagl(canvas);
@@ -64,7 +64,7 @@ bagl.frame(() => {
 ### Deferred Context Binding
 
 ```typescript
-import { createBagl } from 'bagl';
+import { createBagl } from 'bagl-js';
 
 // Create bagl without a canvas
 const bagl = createBagl();
@@ -102,7 +102,7 @@ bagl.attach(canvas);
 ### Animated Example with Context
 
 ```typescript
-import { createBagl } from 'bagl';
+import { createBagl } from 'bagl-js';
 
 const bagl = createBagl();
 
@@ -316,7 +316,7 @@ Available WebGL2 extensions.
 ### 3D Rendering with Lighting
 
 ```typescript
-import { createBagl } from 'bagl';
+import { createBagl } from 'bagl-js';
 import * as mat4 from 'gl-mat4';
 
 const bagl = createBagl();
