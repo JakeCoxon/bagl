@@ -1,7 +1,6 @@
 {
   "name": "bagl",
-  "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/bagl.js",
   "module": "./dist/bagl.js",
@@ -12,6 +11,7 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": ["dist"],
   "scripts": {
     "dev": "vite",
     "start": "vite",
@@ -23,8 +23,10 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "pnpm run build:lib"
   },
+  "keywords": ["webgl", "webgl2", "regl", "graphics", "canvas"],
   "devDependencies": {
     "@types/jsdom": "^21.1.6",
     "@types/node": "^22.10.2",
