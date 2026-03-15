@@ -1,38 +1,9 @@
 // import { attachToCanvas, setupContextLossHandling } from './example';
-import { createBasicTriangleExample } from './basic-triangle';
-import { createCommandInnerStateExample } from './command-inner-state';
-import { createAnimatedTriangleExample } from './animated-triangle';
-import { create3DCubeExample } from './3d-cube';
-import { createFramebufferExample } from './framebuffer';
-import { createParticleExample } from './particles';
-import { createSdfExample } from './sdf';
-import { createLinesExample } from './lines';
-import { createDepthExample } from './depth';
 import { type Bagl } from '../src/types';
 import { mapGlArgs } from '../src/gl-constants';
-import { createScifiExample } from './scifi';
-import { createFluidExample } from './fluid';
-import { createMorphExample } from './morph';
-import { createTrailExample } from './trail';
-  import { createTrailNormalExample } from './trail-normal';
-import { createWarpedGridExample } from './warped-grid';
-import { createLissajousFigureExample } from './lissajous';
-import { createSDFPointCloudExample } from './point-cloud';
-import { createSDEdgePointCloudExample } from './point-cloud-edge';
-import { createChladniPatternsExample } from './chladni';
-import { createCell120Example } from './cell-120';
-import { createDomainWarpExample } from './domain-warp';
-import { createSmoothVoronoiExample } from './smooth-voronoi';
-import { createRepeatingPatternExample } from './repeating-pattern';
-import { createOverlappingTextureExample } from './overlapping-texture';
-import { createVoronoiOrganicExample } from './voronoi-organic';
-import { createCrystallinePatternExample } from './crystalline-pattern';
-import { createOrganicCollageExample } from './collage';
-import { createOverlappingRowExample } from './overlap';
-import { createDomainWarpedWorleyExample } from './domain-warped-worley';
-import { createNoiseShaderExample } from './noise-shader';
-import { createSdfKaleidoLinesExample } from './sdf-kaleido-lines';
-import { createWarpedKaleidoSdfExample } from './warped-kaleido-sdf';
+import { exampleRegistry, type ExampleInstance } from './registry';
+
+const options = exampleRegistry.map(e => ({ value: e.id, text: e.title }));
 
 // Create the layout structure
 const sidebar = document.createElement('div');
@@ -99,41 +70,6 @@ contextInfo.id = 'context-info';
 contextInfo.textContent = 'Context: Not attached';
 contentHeader.appendChild(contextInfo);
 
-const options = [
-  { value: 'basic', text: 'Basic Triangle' },
-  { value: 'command-inner-state', text: 'Command Inner State' },
-  { value: 'animated', text: 'Animated Triangle' },
-  { value: '3d-cube', text: '3D Rotating Cube' },
-  { value: 'framebuffer', text: 'Framebuffer Example' },
-  { value: 'particles', text: 'Particle System' },
-  { value: 'sdf', text: 'SDF Example' },
-  { value: 'lines', text: 'Lines Example' },
-  { value: 'depth', text: 'Depth Example' },
-  { value: 'scifi', text: 'Sci-Fi Example' },
-  { value: 'fluid', text: 'Fluid Example' },
-  { value: 'morph', text: 'Morph Example' },
-  { value: 'trail', text: 'Trail Example' },
-  { value: 'trail-normal', text: 'Trail Normal Example' },
-  { value: 'warp-grid', text: 'Warp Grid Example' },
-  { value: 'lissajous', text: 'Lissajous Figure Example' },
-  { value: 'point-cloud', text: 'Point Cloud Example' },
-  { value: 'point-cloud-edge', text: 'Point Cloud Edge Example' },
-  { value: 'chladni', text: 'Chladni Patterns Example' },
-  { value: 'cell-120', text: 'Cell 120 Example' },
-  { value: 'domain-warp', text: 'Domain Warp Example' },
-  { value: 'smooth-voronoi', text: 'Smooth Voronoi Example' },
-  { value: 'repeating-pattern', text: 'Repeating Pattern Example' },
-  { value: 'overlapping-texture', text: 'Overlapping Texture Example' },
-  { value: 'voronoi-organic', text: 'Voronoi Organic Example' },
-  { value: 'crystalline-pattern', text: 'Crystalline Pattern Example' },
-  { value: 'collage', text: 'Organic Collage Example' },
-  { value: 'overlap', text: 'Overlapping Row Example' },
-  { value: 'domain-warped-worley', text: 'Domain Warped Worley Noise' },
-  { value: 'noise-shader', text: 'Noise Shader (Ghostly Particles)' },
-  { value: 'sdf-kaleido-lines', text: 'SDF Kaleido Lines' },
-  { value: 'warped-kaleido-sdf', text: 'Warped Kaleido SDF' },
-];
-
 // Create navigation items
 let currentActiveNavItem: HTMLElement | null = null;
 options.forEach(option => {
@@ -164,7 +100,7 @@ button.addEventListener('click', () => {
 controls.appendChild(button);
 
 // Example management
-let currentExample: any = null;
+let currentExample: ExampleInstance | null = null;
 let currentBagl: Bagl = null!;
 
 function updateContextInfo() {
@@ -267,388 +203,26 @@ function runExample(exampleType: string) {
   if (currentBagl) {
     currentBagl.destroy();
   }
-  
+
   // Clear the canvas
   gl.clearColor(0, 0, 0, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
-  switch (exampleType) {
-      
-    case 'basic':
-      currentExample = createBasicTriangleExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      currentExample.render();
+  const entry = exampleRegistry.find(e => e.id === exampleType);
+  if (!entry) return;
+
+  currentExample = entry.create();
+  currentBagl = currentExample.bagl;
+  currentBagl.attach(gl);
+
+  if (entry.animated) {
+    currentBagl.frame(() => {
+      currentExample!.render();
       updateContextInfo();
-      break;
-
-    case 'command-inner-state':
-      currentExample = createCommandInnerStateExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      currentExample.render();
-      updateContextInfo();
-      break;
-      
-    case 'animated':
-      currentExample = createAnimatedTriangleExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-      
-    case '3d-cube':
-      currentExample = create3DCubeExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-      
-    case 'framebuffer':
-      currentExample = createFramebufferExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-      
-    case 'particles':
-      currentExample = createParticleExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'sdf':
-      currentExample = createSdfExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'lines':
-      currentExample = createLinesExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'depth':
-      currentExample = createDepthExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'scifi':
-      currentExample = createScifiExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'fluid':
-      currentExample = createFluidExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'morph':
-      currentExample = createMorphExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'trail':
-      currentExample = createTrailExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'trail-normal':
-      currentExample = createTrailNormalExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'warp-grid':
-      currentExample = createWarpedGridExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'lissajous':
-      currentExample = createLissajousFigureExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'point-cloud':
-      currentExample = createSDFPointCloudExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'point-cloud-edge':
-      currentExample = createSDEdgePointCloudExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'chladni':
-      currentExample = createChladniPatternsExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'cell-120':
-      currentExample = createCell120Example();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'domain-warp':
-      currentExample = createDomainWarpExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'smooth-voronoi':
-      currentExample = createSmoothVoronoiExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'repeating-pattern':
-      currentExample = createRepeatingPatternExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'overlapping-texture':
-      currentExample = createOverlappingTextureExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'voronoi-organic':
-      currentExample = createVoronoiOrganicExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'crystalline-pattern':
-      currentExample = createCrystallinePatternExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'collage':
-      currentExample = createOrganicCollageExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-
-    case 'overlap':
-      currentExample = createOverlappingRowExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-      
-    case 'domain-warped-worley':
-      currentExample = createDomainWarpedWorleyExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-      
-    case 'noise-shader':
-      currentExample = createNoiseShaderExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-      
-    case 'sdf-kaleido-lines':
-      currentExample = createSdfKaleidoLinesExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
-      
-    case 'warped-kaleido-sdf':
-      currentExample = createWarpedKaleidoSdfExample();
-      currentBagl = currentExample.bagl;
-      currentBagl.attach(gl);
-      
-      // Set up render loop
-      currentBagl.frame(() => {
-        currentExample.render();
-        updateContextInfo();
-      });
-      break;
+    });
+  } else {
+    currentExample!.render();
+    updateContextInfo();
   }
 }
 
