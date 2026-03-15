@@ -1,0 +1,43 @@
+{
+  "name": "bagl",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/bagl.js",
+  "module": "./dist/bagl.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/bagl.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "examples": "vite",
+    "build": "tsc && vite build",
+    "build:lib": "vite build --config vite.lib.config.ts && tsc --project tsconfig.build.json",
+    "build:examples": "vite build",
+    "build:types": "tsc --project tsconfig.build.json",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.6",
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^2.1.8",
+    "gl-mat4": "^1.2.0",
+    "jsdom": "^25.0.1",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.0",
+    "vitest": "^2.1.8",
+    "earcut": "^3.0.2",
+    "tweakpane": "^4.0.5"
+  },
+  "dependencies": {
+  },
+  "packageManager": "pnpm@9.12.3+sha512.cce0f9de9c5a7c95bef944169cc5dfe8741abfb145078c0d508b868056848a87c81e626246cb60967cbd7fd29a6c062ef73ff840d96b3c86c40ac92cf4a813ee"
+}
