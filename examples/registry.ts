@@ -31,6 +31,8 @@ import { createDomainWarpedWorleyExample } from './domain-warped-worley';
 import { createNoiseShaderExample } from './noise-shader';
 import { createSdfKaleidoLinesExample } from './sdf-kaleido-lines';
 import { createWarpedKaleidoSdfExample } from './warped-kaleido-sdf';
+import { createBlendModesExample } from './blend-modes';
+import { create3DSpinningTorusExample } from './torus-3d';
 
 export interface ExampleInstance {
   bagl: Bagl;
@@ -49,6 +51,7 @@ export const exampleRegistry: ExampleEntry[] = [
   { id: 'command-inner-state', title: 'Command Inner State', create: createCommandInnerStateExample, animated: false },
   { id: 'animated', title: 'Animated Triangle', create: createAnimatedTriangleExample, animated: true },
   { id: '3d-cube', title: '3D Rotating Cube', create: create3DCubeExample, animated: true },
+  { id: '3d-torus', title: '3D Spinning Shaded Torus', create: create3DSpinningTorusExample, animated: true },
   { id: 'framebuffer', title: 'Framebuffer Example', create: createFramebufferExample, animated: true },
   { id: 'particles', title: 'Particle System', create: createParticleExample, animated: true },
   { id: 'sdf', title: 'SDF Example', create: createSdfExample, animated: true },
@@ -77,4 +80,5 @@ export const exampleRegistry: ExampleEntry[] = [
   { id: 'noise-shader', title: 'Noise Shader (Ghostly Particles)', create: createNoiseShaderExample, animated: true },
   { id: 'sdf-kaleido-lines', title: 'SDF Kaleido Lines', create: createSdfKaleidoLinesExample, animated: true },
   { id: 'warped-kaleido-sdf', title: 'Warped Kaleido SDF', create: createWarpedKaleidoSdfExample, animated: true },
+  { id: 'blend-modes', title: 'Blend Modes Presets', create: createBlendModesExample, animated: true },
 ];
