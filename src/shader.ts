@@ -1,7 +1,7 @@
 // Shader compilation and program management
 
 import type { GLContextState } from './api';
-import type { GLSLThunk, Context, ElementsHandle, BufferHandle, GLLimits, CommandDesc, PropValue, AttributeInit, ElementsDescInit } from './types';
+import type { GLSLThunk, Context, ElementsHandle, BufferHandle, GLLimits, CommandDesc, PropValue, AttributeInit, AttributeBufferDescriptor, AttributeDataInit, ElementsDescInit } from './types';
 import { isTexture2D, isCubeMap, isFramebuffer, isBuffer, isElements, isBaglObject } from './types';
 
 export type AttributeType = 'float' | 'float_vec2' | 'float_vec3' | 'float_vec4' | 'int_vec2' | 'int_vec3' | 'int_vec4';
@@ -115,7 +115,18 @@ export function compileVAO<P>(gl: WebGL2RenderingContext, program: CompiledProgr
   const vao = gl.createVertexArray();
   if (!vao) throw new Error('bagl: failed to create vertex array object');
 
-  let appliedAttributes: Record<string, AttributeInit> = {};
+  type AppliedAttributeBinding = {
+    buffer: WebGLBuffer;
+    size: number;
+    stride: number;
+    offset: number;
+  };
+  type ResolvedAttributeBinding = AppliedAttributeBinding & {
+    uploadData?: ArrayBufferView;
+    alwaysRebind?: boolean;
+  };
+
+  let appliedAttributes: Record<string, AppliedAttributeBinding> = {};
   let internalBuffers: Record<string, WebGLBuffer> = {};
 
   // Internal buffers are used when the user provides the data as an array
@@ -133,6 +144,91 @@ export function compileVAO<P>(gl: WebGL2RenderingContext, program: CompiledProgr
     if (elements instanceof Uint16Array) return elements;
     if (Array.isArray(elements)) return new Uint16Array(elements);
     throw new Error(`bagl: unsupported elements type: ${typeof elements}`);
+  }
+
+  function isAttributeBufferDescriptor(attr: AttributeInit): attr is AttributeBufferDescriptor {
+    return !!attr && typeof attr === 'object' && !isBuffer(attr) && !isElements(attr) && 'buffer' in attr;
+  }
+
+  function isAttributeDataInit(attr: AttributeInit): attr is AttributeDataInit {
+    return !!attr && typeof attr === 'object' && !isBuffer(attr) && !isElements(attr) && 'data' in attr;
+  }
+
+  function assertValidLayout(name: string, stride: number, offset: number): void {
+    if (!Number.isInteger(stride) || stride < 0) {
+      throw new Error(`bagl: attribute '${name}' has invalid stride: ${stride}`);
+    }
+    if (!Number.isInteger(offset) || offset < 0) {
+      throw new Error(`bagl: attribute '${name}' has invalid offset: ${offset}`);
+    }
+  }
+
+  function hasSameAppliedBinding(
+    previous: AppliedAttributeBinding | undefined,
+    buffer: WebGLBuffer,
+    size: number,
+    stride: number,
+    offset: number
+  ): boolean {
+    return !!previous &&
+      previous.buffer === buffer &&
+      previous.size === size &&
+      previous.stride === stride &&
+      previous.offset === offset;
+  }
+
+  function resolveAttributeBinding(name: string, attr: AttributeInit): ResolvedAttributeBinding {
+    if (isElements(attr)) {
+      throw new Error(`bagl: element buffer '${name}' should not be used as a vertex attribute`);
+    }
+
+    if (isBuffer(attr)) {
+      if (!attr._gpu) throw new Error(`bagl: buffer '${name}' not attached to GPU yet`);
+      if (!attr.size) throw new Error(`bagl: buffer '${name}' has no size`);
+
+      const binding = { buffer: attr._gpu, size: attr.size, stride: 0, offset: 0 };
+      assertValidLayout(name, binding.stride, binding.offset);
+      return binding;
+    }
+
+    if (Array.isArray(attr)) {
+      throw new Error(`bagl: static arrays are not supported as vertex attributes`);
+    }
+
+    if (isAttributeBufferDescriptor(attr)) {
+      const bufferHandle = attr.buffer;
+      if (!isBuffer(bufferHandle)) throw new Error(`bagl: attribute '${name}' has invalid buffer descriptor`);
+      if (!bufferHandle._gpu) throw new Error(`bagl: buffer '${name}' not attached to GPU yet`);
+
+      const size = attr.size ?? bufferHandle.size;
+      if (!size) throw new Error(`bagl: buffer '${name}' has no size`);
+
+      const binding = {
+        buffer: bufferHandle._gpu,
+        size,
+        stride: attr.stride ?? 0,
+        offset: attr.offset ?? 0
+      };
+      assertValidLayout(name, binding.stride, binding.offset);
+      return binding;
+    }
+
+    if (isAttributeDataInit(attr)) {
+      if (!attr.size) throw new Error(`bagl: buffer '${name}' has no size`);
+
+      return {
+        buffer: getOrCreateInternalBuffer(name),
+        size: attr.size,
+        stride: 0,
+        offset: 0,
+        uploadData: attr.data,
+        // Inline { data, size } attributes are treated as dynamic input, so we avoid cache
+        // short-circuiting and always re-apply the pointer after each upload.
+        alwaysRebind: true
+      };
+    }
+
+    throw new Error(`bagl: unsupported attribute type for '${name}': ${typeof attr}`);
   }
 
   function applyAttributes(gl: WebGL2RenderingContext, evaluatedDesc: EvaluatedCommandDesc<P>): void {
@@ -159,46 +255,34 @@ export function compileVAO<P>(gl: WebGL2RenderingContext, program: CompiledProgr
     }
 
     for (const [name, attr] of Object.entries(attributes)) {
-      const location = program.attributes.get(name)!.location;
+      const attributeInfo = program.attributes.get(name);
       
-      if (location === undefined) {
+      if (!attributeInfo) {
         throw new Error(`bagl: attribute '${name}' not found in shader`);
       }
+      const location = attributeInfo.location;
 
-      if (isElements(attr)) throw new Error(`bagl: element buffer '${name}' should not be used as a vertex attribute`);
-
-      if (isBuffer(attr)) {
-        // Skip if the buffer has already been applied to this VAO
-        if (appliedAttributes[name] === attr) continue;
-        
-        // It's a vertex buffer handle
-        if (!attr._gpu) throw new Error(`bagl: buffer '${name}' not attached to GPU yet`);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, attr._gpu);
-        gl.enableVertexAttribArray(location);
-        
-        if (!attr.size) throw new Error(`bagl: buffer '${name}' has no size`);
-        
-        gl.vertexAttribPointer(location, attr.size, gl.FLOAT, false, 0, 0);
-        
-      } else if (Array.isArray(attr)) {
-        // We need size data to be provided, so we can't infer it directly from the array
-        throw new Error(`bagl: static arrays are not supported as vertex attributes`);
-      } else if (typeof attr === 'object') {
-        const buffer = getOrCreateInternalBuffer(name);
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, attr.data, gl.STATIC_DRAW);
-        
-        gl.enableVertexAttribArray(location);
-        
-        if (!attr.size) throw new Error(`bagl: buffer '${name}' has no size`);
-        
-        gl.vertexAttribPointer(location, attr.size, gl.FLOAT, false, 0, 0);
-      } else {
-        throw new Error(`bagl: unsupported attribute type for '${name}': ${typeof attr}`);
+      const binding = resolveAttributeBinding(name, attr);
+      const previous = appliedAttributes[name];
+      if (!binding.alwaysRebind &&
+        hasSameAppliedBinding(previous, binding.buffer, binding.size, binding.stride, binding.offset)
+      ) {
+        continue;
       }
 
-      appliedAttributes[name] = attr;
+      gl.bindBuffer(gl.ARRAY_BUFFER, binding.buffer);
+      if (binding.uploadData) {
+        gl.bufferData(gl.ARRAY_BUFFER, binding.uploadData, gl.STATIC_DRAW);
+      }
+
+      gl.enableVertexAttribArray(location);
+      gl.vertexAttribPointer(location, binding.size, gl.FLOAT, false, binding.stride, binding.offset);
+      appliedAttributes[name] = {
+        buffer: binding.buffer,
+        size: binding.size,
+        stride: binding.stride,
+        offset: binding.offset
+      };
     }
   }
   

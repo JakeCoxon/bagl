@@ -229,6 +229,7 @@ export interface CommandDesc<P = any> {
   instances?: NumberProp<P>;
   count?: NumberProp<P>;
   primitive?: PropValue<PrimitiveType, P>;
+  // Draw-call offset (first vertex for drawArrays, byte offset for drawElements)
   offset?: NumberProp<P>;
 
   // Uniforms & textures
@@ -261,10 +262,21 @@ export type BaglObject = BufferHandle | ElementsHandle | Texture2DHandle | CubeM
 
 export type ElementsDescInit = ElementsHandle | ElementsInit | Uint16Array | number[];
 
-export type AttributeInit = BufferHandle | {
+export interface AttributeDataInit {
   data: ArrayBufferView;
   size?: number;
 }
+
+export interface AttributeBufferDescriptor {
+  buffer: BufferHandle;
+  size?: number;
+  // Byte offset in the bound vertex buffer
+  offset?: number;
+  // Byte stride in the bound vertex buffer (0 = tightly packed)
+  stride?: number;
+}
+
+export type AttributeInit = BufferHandle | AttributeDataInit | AttributeBufferDescriptor;
 
 // Attribute and uniform maps
 export type AttributeMap<P> = Record<string, PropValue<AttributeInit, P>>;

@@ -17,6 +17,8 @@ export type {
   CommandDesc,
   DrawCommand,
   GLSLThunk,
+  AttributeDataInit,
+  AttributeBufferDescriptor,
   AttributeMap,
   UniformMap,
   DepthState,

@@ -1,5 +1,6 @@
 import type { Bagl } from '../src/types';
 import { createBasicTriangleExample } from './basic-triangle';
+import { createStrideInterleavedExample } from './stride-interleaved';
 import { createCommandInnerStateExample } from './command-inner-state';
 import { createAnimatedTriangleExample } from './animated-triangle';
 import { create3DCubeExample } from './3d-cube';
@@ -48,6 +49,7 @@ export interface ExampleEntry {
 
 export const exampleRegistry: ExampleEntry[] = [
   { id: 'basic', title: 'Basic Triangle', create: createBasicTriangleExample, animated: false },
+  { id: 'stride-interleaved', title: 'Interleaved Stride Attributes', create: createStrideInterleavedExample, animated: false },
   { id: 'command-inner-state', title: 'Command Inner State', create: createCommandInnerStateExample, animated: false },
   { id: 'animated', title: 'Animated Triangle', create: createAnimatedTriangleExample, animated: true },
   { id: '3d-cube', title: '3D Rotating Cube', create: create3DCubeExample, animated: true },

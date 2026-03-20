@@ -254,6 +254,51 @@ const draw = bagl({
 });
 ```
 
+Attributes also support descriptor objects for interleaved layouts:
+
+```typescript
+const interleaved = bagl.buffer({
+  // [pos.x, pos.y, uv.x, uv.y] per vertex
+  data: new Float32Array([
+    -1, -1, 0, 0,
+     1, -1, 1, 0,
+     0,  1, 0.5, 1
+  ]),
+  size: 4
+});
+
+const drawInterleaved = bagl({
+  vert: `
+    #version 300 es
+    precision mediump float;
+    in vec2 position;
+    in vec2 uv;
+    out vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position, 0.0, 1.0);
+    }
+  `,
+  frag: `
+    #version 300 es
+    precision mediump float;
+    in vec2 vUv;
+    out vec4 color;
+    void main() {
+      color = vec4(vUv, 0.0, 1.0);
+    }
+  `,
+  attributes: {
+    position: { buffer: interleaved, size: 2, stride: 16, offset: 0 },
+    uv: { buffer: interleaved, size: 2, stride: 16, offset: 8 }
+  },
+  count: 3
+});
+```
+
+`stride` and `offset` are in bytes (matching `gl.vertexAttribPointer`).
+This is separate from command-level draw `offset`, which controls where drawing starts.
+
 ### Uniform Functions
 
 Uniforms can be static values or functions that receive context and props:

@@ -398,6 +398,108 @@ describe('CommandBuilder', () => {
       expect(drawArraysSpy).toHaveBeenCalledTimes(3);
     });
 
+    it('should apply descriptor attributes with byte stride and offset', () => {
+      const interleaved = createBuffer({
+        data: new Float32Array([
+          -1, -1, 0, 0,
+          1, -1, 1, 0,
+          0, 1, 0.5, 1
+        ]),
+        size: 4
+      }, registry, context);
+
+      const desc = {
+        vert: `
+          #version 300 es
+          precision mediump float;
+          in vec2 position;
+          void main() {
+            gl_Position = vec4(position, 0.0, 1.0);
+          }
+        `,
+        frag: `
+          #version 300 es
+          precision mediump float;
+          out vec4 color;
+          void main() {
+            color = vec4(1.0, 0.0, 0.0, 1.0);
+          }
+        `,
+        attributes: {
+          position: {
+            buffer: interleaved,
+            size: 2,
+            stride: 16,
+            offset: 8
+          }
+        },
+        count: 3
+      } satisfies CommandDesc<unknown>;
+
+      mockGlSetAttribs(mockGL, ['position']);
+      mockGlSetUniforms(mockGL, []);
+
+      const command = commandBuilder.build(desc, context, contextObj);
+      const vertexAttribPointerSpy = vi.spyOn(mockGL, 'vertexAttribPointer');
+
+      command();
+
+      expect(vertexAttribPointerSpy).toHaveBeenCalledWith(0, 2, mockGL.FLOAT, false, 16, 8);
+    });
+
+    it('should rebind attribute pointer when descriptor layout changes', () => {
+      const interleaved = createBuffer({
+        data: new Float32Array([
+          -1, -1, 0, 0,
+          1, -1, 1, 0,
+          0, 1, 0.5, 1
+        ]),
+        size: 4
+      }, registry, context);
+
+      const desc = {
+        vert: `
+          #version 300 es
+          precision mediump float;
+          in vec2 position;
+          void main() {
+            gl_Position = vec4(position, 0.0, 1.0);
+          }
+        `,
+        frag: `
+          #version 300 es
+          precision mediump float;
+          out vec4 color;
+          void main() {
+            color = vec4(1.0, 0.0, 0.0, 1.0);
+          }
+        `,
+        attributes: {
+          position: (_context: any, props: { secondHalf?: boolean }) => ({
+            buffer: interleaved,
+            size: 2,
+            stride: 16,
+            offset: props.secondHalf ? 8 : 0
+          })
+        },
+        count: 3
+      } satisfies CommandDesc<{ secondHalf?: boolean }>;
+
+      mockGlSetAttribs(mockGL, ['position']);
+      mockGlSetUniforms(mockGL, []);
+
+      const command = commandBuilder.build(desc, context, contextObj);
+      const vertexAttribPointerSpy = vi.spyOn(mockGL, 'vertexAttribPointer');
+
+      command();
+      command();
+      command({ secondHalf: true });
+
+      expect(vertexAttribPointerSpy).toHaveBeenCalledTimes(2);
+      expect(vertexAttribPointerSpy.mock.calls[0]).toEqual([0, 2, mockGL.FLOAT, false, 16, 0]);
+      expect(vertexAttribPointerSpy.mock.calls[1]).toEqual([0, 2, mockGL.FLOAT, false, 16, 8]);
+    });
+
     it('should run inner function with command GL state (blend, framebuffer, viewport)', () => {
       const fbo = createFramebuffer(
         { width: 256, height: 128 },
