@@ -279,6 +279,64 @@ describe('Texture2D', () => {
       expect(texture.width).toBe(64);
       expect(texture.height).toBe(64);
     });
+
+    it('should create texture sized from canvas image data when width and height are omitted', () => {
+      const source = document.createElement('canvas');
+      source.width = 12;
+      source.height = 34;
+      const texture = createTexture2D_({
+        data: source
+      });
+
+      context.attach(mockGL);
+
+      expect(texture.width).toBe(12);
+      expect(texture.height).toBe(34);
+    });
+
+    it('should create texture sized from source image data when width and height are omitted', () => {
+      const imageData = {
+        width: 12,
+        height: 34,
+        data: new Uint8ClampedArray(12 * 34 * 4),
+        colorSpace: 'srgb'
+      } satisfies ImageData;
+      
+      const texture = createTexture2D_({
+        data: imageData
+      });
+
+      context.attach(mockGL);
+
+      expect(texture.width).toBe(12);
+      expect(texture.height).toBe(34);
+    });
+
+    it('should update texture size when an initially-unloaded image becomes loaded', () => {
+      const image = Object.create(HTMLImageElement.prototype) as HTMLImageElement;
+      Object.defineProperty(image, 'complete', { value: false, writable: true, configurable: true });
+      Object.defineProperty(image, 'width', { value: 0, writable: true, configurable: true });
+      Object.defineProperty(image, 'height', { value: 0, writable: true, configurable: true });
+      let onLoad: ((event: Event) => void) | undefined;
+      (image as any).addEventListener = (type: string, listener: EventListenerOrEventListenerObject) => {
+        if (type === 'load' && typeof listener === 'function') {
+          onLoad = listener as (event: Event) => void;
+        }
+      };
+      const texImage2DSpy = vi.spyOn(mockGL, 'texImage2D');
+      const texture = createTexture2D_({
+        data: image
+      });
+      context.attach(mockGL);
+      expect(texture._gpu).not.toBeNull();
+      image.width = 21;
+      image.height = 13;
+      (image as any).complete = true;
+      onLoad?.(new Event('load'));
+      expect(texture.width).toBe(21);
+      expect(texture.height).toBe(13);
+      expect(texImage2DSpy).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('subdata', () => {

@@ -111,8 +111,10 @@ export interface ElementsInit {
   usage?: BufferUsage;
 }
 
+export type Tex2DData = ArrayBufferView | TexImageSource
+
 export interface Tex2DInit {
-  data?: ArrayBufferView | HTMLImageElement | HTMLCanvasElement | HTMLVideoElement;
+  data?: Tex2DData;
   width?: number;
   height?: number;
   format?: TextureFormat;

@@ -4,7 +4,8 @@ import type {
   BufferHandle, ElementsHandle, Texture2DHandle, CubeMapHandle, 
   FramebufferHandle, FramebufferCubeHandle,
   BufferInit, ElementsInit, Tex2DInit, CubeMapInit, FBOInit, FBOCubeInit, 
-  TextureType
+  TextureType,
+  Tex2DData
 } from './types';
 import type { AttachFn, ContextLifecycle, DetachFn } from './context-life';
 import type { InternalState } from './api';
@@ -153,12 +154,24 @@ export function createElements(init: ElementsInit, registry: ResourceRegistry, c
   return buffer as unknown as ElementsHandle;
 }
 
+let placeholderImageData: ImageData | null = null;
+const getOrCreatePlaceholderImageData = () => {
+  if (placeholderImageData) return placeholderImageData;
+  const data = new Uint8ClampedArray(32 * 32 * 4)
+  for (let i = 0; i < 32 * 32; i++) {
+    data[i * 4] = 255;
+    data[i * 4 + 1] = 0;
+    data[i * 4 + 2] = 255;
+    data[i * 4 + 3] = 255;
+  }
+  placeholderImageData = { width: 32, height: 32, data, colorSpace: 'srgb' };
+  return placeholderImageData;
+}
+
 // Texture2D implementation
 export function createTexture2D(init: Tex2DInit, internalState: InternalState, registry: ResourceRegistry, context: ContextLifecycle): Texture2DHandle {
   let gpu: WebGLTexture | null = null;
   let gl: WebGL2RenderingContext | null = null;
-  let width = init.width ?? 1;
-  let height = init.height ?? 1;
   const format = getTextureFormat(init.format ?? 'rgba');
   const internalFormat = getTextureInternalFormat(init.internalFormat ?? 'rgba8');
   const type = getTextureType(init.type ?? 'ubyte');
@@ -169,10 +182,12 @@ export function createTexture2D(init: Tex2DInit, internalState: InternalState, r
   const flipY = init.flipY ?? false;
   const premultiplyAlpha = init.premultiplyAlpha ?? false;
   let isTemporaryTexture = false
-  // const copyFromBuffer = init.copyFromBuffer ?? false;
+  const intrinsicSize = getImageDataSize(init.data);
+  let width = init.width ?? intrinsicSize?.[0] ?? 1;
+  let height = init.height ?? intrinsicSize?.[1] ?? 1;
 
   function setupTextureParameters() {
-    if (!gl || !gpu) return;
+    if (!gl || !gpu) throw new Error('bagl: texture.setupTextureParameters() called when not attached to a context');
     
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, min);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, mag);
@@ -186,61 +201,64 @@ export function createTexture2D(init: Tex2DInit, internalState: InternalState, r
 
   }
 
+
+  function uploadTextureData(
+    data?: Tex2DData,
+    newWidth?: number,
+    newHeight?: number
+  ) {
+    if (!gl || !gpu) throw new Error('bagl: texture.uploadTextureData() called when not attached to a context');
+
+    const targetWidth = newWidth ?? width;
+    const targetHeight = newHeight ?? height;
+
+    if (!data) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, targetWidth, targetHeight, 0, format, type, null);
+    } else if (data instanceof HTMLImageElement || 
+        data instanceof HTMLCanvasElement || 
+        data instanceof HTMLVideoElement) {
+
+      if (data instanceof HTMLImageElement && !data.complete) {
+        throw new Error('bagl: texture.uploadTextureData() called with incomplete image data');
+      }
+      
+      gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, targetWidth, targetHeight, 0, format, type, data);
+    } else if (ArrayBuffer.isView(data)) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, targetWidth, targetHeight, 0, format, type, data);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, targetWidth, targetHeight, 0, format, type, data);
+    }
+  }
+
   // Shared function to handle texture data
   function handleTextureData(
-    data?: ArrayBufferView | HTMLImageElement | HTMLCanvasElement | HTMLVideoElement,
+    data?: Tex2DData,
     newWidth?: number,
     newHeight?: number,
     copyFromBuffer = false
   ) {
-    if (!gl || !gpu) return;
+    if (!gl || !gpu) throw new Error('bagl: texture.handleTextureData() called when not attached to a context');
 
     const targetWidth = newWidth ?? width;
     const targetHeight = newHeight ?? height;
 
     if (copyFromBuffer) {
       gl.copyTexImage2D(gl.TEXTURE_2D, 0, internalFormat, 0, 0, targetWidth, targetHeight, 0);
-    } else if (data) {
-      if (data instanceof HTMLImageElement || 
-          data instanceof HTMLCanvasElement || 
-          data instanceof HTMLVideoElement) {
-        
-        // Handle incomplete image loading
-        if (data instanceof HTMLImageElement && !data.complete) {
-          const img = data as HTMLImageElement;
-          // Create a placeholder texture with reasonable dimensions
-          // Use the provided dimensions or default to a reasonable size
-          const placeholderWidth = targetWidth > 1 ? targetWidth : 32;
-          const placeholderHeight = targetHeight > 1 ? targetHeight : 32;
-          
-          // gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, placeholderWidth, placeholderHeight, 0, format, type, null);
-          const emptyData = new Uint8Array(placeholderWidth * placeholderHeight * 4); // All zeros
-          for (let i = 0; i < placeholderWidth * placeholderHeight; i++) {
-            emptyData[i * 4] = 255;
-            emptyData[i * 4 + 1] = 0;
-            emptyData[i * 4 + 2] = 255;
-            emptyData[i * 4 + 3] = 255;
-          }
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, placeholderWidth, placeholderHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, emptyData);
+      return
+    }
+     
+    if (data instanceof HTMLImageElement && !data.complete) {
+      handleIncompleteImage(data);
+      return
+    }
 
-          width = placeholderWidth;
-          height = placeholderHeight;
-          
-          attachLoadHandler(img);
-        } else {
-          gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, format, type, data);
-          width = data.width;
-          height = data.height;
-        }
-      } else {
-        gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, targetWidth, targetHeight, 0, format, type, data);
-      }
-    } else {
-      gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, targetWidth, targetHeight, 0, format, type, null);
-    } 
+    uploadTextureData(data, targetWidth, targetHeight);
   }
 
-  function attachLoadHandler(img: HTMLImageElement) {
+  function handleIncompleteImage(img: HTMLImageElement) {
+    const placeholderImageData = getOrCreatePlaceholderImageData();
+    uploadTextureData(placeholderImageData, placeholderImageData.width, placeholderImageData.height);
+
     img.addEventListener('load', () => {
       if (!gl || !gpu) return;
 
@@ -249,7 +267,7 @@ export function createTexture2D(init: Tex2DInit, internalState: InternalState, r
       // Update dimensions and re-upload the actual image data
       width = img.width;
       height = img.height;
-      
+
       const { state } = internalState.glContextState!;
 
       state.storeCurrentTexture();
@@ -304,13 +322,29 @@ export function createTexture2D(init: Tex2DInit, internalState: InternalState, r
     registry.removeAndDetachResource(api, registry.textures);
   }
 
+  function getImageDataSize(data: Tex2DData | undefined): [number, number] | undefined {
+    if (!data) return undefined;
+    if (data instanceof HTMLImageElement || 
+        data instanceof HTMLCanvasElement || 
+        data instanceof HTMLVideoElement) {
+      return [data.width, data.height];
+    } else if ('width' in data) {
+      // ImageBitmap | ImageData | OffscreenCanvas
+      return [data.width, data.height];
+    } else if ('codedWidth' in data) {
+      // VideoFrame
+      return [data.codedWidth, data.codedHeight];
+    }
+  }
+
   function textureUpdater(props: Tex2DInit) {
     if (!gl || !gpu) {
       throw new Error('bagl: texture.update() called when not attached to a context');
     }
 
-    const newWidth = props.width ?? width;
-    const newHeight = props.height ?? height;
+    const intrinsicSize = getImageDataSize(props.data);
+    const newWidth = props.width ?? intrinsicSize?.[0] ?? width;
+    const newHeight = props.height ?? intrinsicSize?.[1] ?? height;
     
     if (newWidth <= 0 || newHeight <= 0) {
       throw new Error('bagl: texture dimensions must be positive');
